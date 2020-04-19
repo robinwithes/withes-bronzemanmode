@@ -4,12 +4,11 @@ import com.google.inject.Provides;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.events.ChatMessage;
-import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.ItemContainerChanged;
-import net.runelite.api.events.ScriptPostFired;
+import net.runelite.api.events.*;
 import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.RuneLite;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.*;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -34,6 +33,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
@@ -81,6 +81,9 @@ public class BronzeManModePlugin extends Plugin {
     @Inject
     private BronzeManModeConfig config;
 
+    @Inject
+    private ClientThread clientThread;
+
     @Getter
     private BufferedImage unlockImage = null;
 
@@ -89,6 +92,7 @@ public class BronzeManModePlugin extends Plugin {
     private final String RESET_COMMAND = "!reset";
     private final String BACKUP_COMMAND = "!backup";
 
+    private int iconOffset = -1;
     private volatile List<Integer> unlockedItems;
     private Color textColor = new Color(87, 87, 87, 0);
     private boolean readyToSave = true;
@@ -108,12 +112,26 @@ public class BronzeManModePlugin extends Plugin {
         loadPlayerUnlocks();
         overlayManager.add(bronzemanOverlay);
         unlockDefaultItems();
+        clientThread.invoke(() ->
+        {
+            if (client.getGameState() == GameState.LOGGED_IN) {
+                setupChatName(getNameChatbox());
+            }
+        });
+
     }
 
     @Override
     protected void shutDown() throws Exception {
         super.shutDown();
         overlayManager.remove(bronzemanOverlay);
+        clientThread.invoke(() ->
+        {
+            if (client.getGameState() == GameState.LOGGED_IN )
+            {
+                setupChatName(client.getLocalPlayer().getName());
+            }
+        });
     }
 
     /**
@@ -123,6 +141,7 @@ public class BronzeManModePlugin extends Plugin {
     public void onGameStateChanged(GameStateChanged e) {
         if (e.getGameState() == GameState.LOGGED_IN) {
             loadPlayerUnlocks();
+            setupImages();
         }
     }
 
@@ -151,45 +170,67 @@ public class BronzeManModePlugin extends Plugin {
     }
 
     @Subscribe
-    public void onScriptPostFired(ScriptPostFired event)
-    {
-        if (event.getScriptId() == GE_SEARCH_BUILD_SCRIPT)
-        {
+    public void onScriptPostFired(ScriptPostFired event) {
+        if (event.getScriptId() == GE_SEARCH_BUILD_SCRIPT) {
             filterResults();
+        }
+    }
+
+    @Subscribe
+    public void onScriptCallbackEvent(ScriptCallbackEvent event) {
+        if (event.getEventName().equals("setChatboxInput")) {
+            setupChatName(getNameChatbox());
         }
     }
 
     private void filterResults() {
         Widget grandExchangeWindow = client.getWidget(162, 53);
-            if (grandExchangeWindow == null) {
-                return;
+        if (grandExchangeWindow == null) {
+            return;
+        }
+        if (client.getWidget(162, 53) == null) {
+            return;
+        }
+
+        Widget[] children = client.getWidget(162, 53).getChildren();
+        if (children == null) {
+            return;
+        }
+
+        for (int i = 0; i < children.length; i += 3) {
+            if (children[i] == null) {
+                continue;
             }
-            if (client.getWidget(162, 53) == null) {
-                return;
+            if (i + 2 > children.length - 1 || children[i + 2] == null) {
+                continue;
             }
 
-            Widget[] children = client.getWidget(162, 53).getChildren();
-            if (children == null) {
-                return;
+            if (!unlockedItems.contains(children[i + 2].getItemId())) {
+                children[i].setHidden(true);
+                Widget text = children[i + 1];
+                Widget image = children[i + 2];
+                text.setTextColor(textColor.getRGB());
+                text.setOpacity(210);
+                image.setOpacity(210);
             }
+        }
+    }
 
-            for (int i = 0; i < children.length; i += 3) {
-                if (children[i] == null) {
-                    continue;
-                }
-                if (i + 2 > children.length - 1 || children[i + 2] == null) {
-                    continue;
-                }
+    @Subscribe
+    public void onChatMessage(ChatMessage chatMessage) {
+        if (client.getGameState() != GameState.LOGGED_IN || client.getLocalPlayer().getName() == null || chatMessage.getName() == null) {
+            return;
+        }
 
-                if (!unlockedItems.contains(children[i + 2].getItemId())) {
-                    children[i].setHidden(true);
-                    Widget text = children[i + 1];
-                    Widget image = children[i + 2];
-                    text.setTextColor(textColor.getRGB());
-                    text.setOpacity(210);
-                    image.setOpacity(210);
-                }
-            }
+        String name = Text.removeTags(chatMessage.getName());
+        name = Text.sanitize(name);
+        String playerName = Text.removeTags(client.getLocalPlayer().getName());
+        playerName = Text.sanitize(playerName);
+
+        if (name.equals(playerName)) {
+            AddIconToMessage(chatMessage);
+        }
+
     }
 
     /**
@@ -240,7 +281,9 @@ public class BronzeManModePlugin extends Plugin {
      **/
     private void savePlayerUnlocks() {
         try {
-            if (client.getUsername() == "" || client.getUsername() == null) return;
+            if (client.getUsername() == "" || client.getUsername() == null) {
+                return;
+            }
             File playerFolder = new File(RuneLite.PROFILES_DIR, client.getUsername());
             System.out.println("Saving unlocks to: " + playerFolder.getAbsolutePath());
             File playerFile = new File(playerFolder, "bronzeman-unlocks.txt");
@@ -260,7 +303,9 @@ public class BronzeManModePlugin extends Plugin {
     private void loadPlayerUnlocks() {
         unlockedItems.clear();
         try {
-            if (client.getUsername() == "" || client.getUsername() == null) return;
+            if (client.getUsername() == "" || client.getUsername() == null) {
+                return;
+            }
             File playerFolder = new File(RuneLite.PROFILES_DIR, client.getUsername());
             if (!playerFolder.exists()) {
                 playerFolder.mkdirs();
@@ -286,8 +331,21 @@ public class BronzeManModePlugin extends Plugin {
      * Loads image files
      **/
     private void setupImages() {
+        final IndexedSprite[] modIcons = client.getModIcons();
+        if (iconOffset != -1 || modIcons == null)
+        {
+            return;
+        }
         unlockImage = ImageUtil.getResourceStreamFromClass(getClass(), "/unlock_image.png");
         bronzeManHeadIcon = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_icon.png");
+        IndexedSprite indexedSprite = ImageUtil.getImageIndexedSprite(bronzeManHeadIcon, client);
+
+        iconOffset = modIcons.length;
+
+        final IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + 1);
+        newModIcons[newModIcons.length - 1] = indexedSprite;
+
+        client.setModIcons(newModIcons);
     }
 
     private void setupChatCommands() {
@@ -297,7 +355,9 @@ public class BronzeManModePlugin extends Plugin {
     }
 
     private void backupUnlocks(ChatMessage chatMessage, String s) {
-        if (!config.backupCommand()) return;
+        if (!config.backupCommand()) {
+            return;
+        }
         File playerFolder = new File(RuneLite.PROFILES_DIR, client.getUsername());
         if (!playerFolder.exists()) {
             return;
@@ -322,11 +382,12 @@ public class BronzeManModePlugin extends Plugin {
     }
 
     private void countItems(ChatMessage chatMessage, String s) {
-        if (!config.countCommand()) return;
+        if (!config.countCommand()) {
+            return;
+        }
         MessageNode messageNode = chatMessage.getMessageNode();
 
-        if (!Text.sanitize(messageNode.getName()).equals(Text.sanitize(client.getLocalPlayer().getName())))
-        {
+        if (!Text.sanitize(messageNode.getName()).equals(Text.sanitize(client.getLocalPlayer().getName()))) {
             return;
         }
 
@@ -343,7 +404,9 @@ public class BronzeManModePlugin extends Plugin {
     }
 
     private void resetUnlocks(ChatMessage chatMessage, String s) {
-        if (!config.resetCommand()) return;
+        if (!config.resetCommand()) {
+            return;
+        }
         config.startItemsUnlocked(false);
         try {
             File playerFolder = new File(RuneLite.PROFILES_DIR, client.getUsername());
@@ -361,22 +424,20 @@ public class BronzeManModePlugin extends Plugin {
 
     }
 
-    private void sendMessage(String chatMessage)
-    {
+    private void sendMessage(String chatMessage) {
         final String message = new ChatMessageBuilder()
                 .append(ChatColorType.HIGHLIGHT)
                 .append(chatMessage)
                 .build();
 
         chatMessageManager.queue(QueuedMessage.builder()
-                        .type(ChatMessageType.CONSOLE)
-                        .runeLiteFormattedMessage(message)
-                        .build());
+                .type(ChatMessageType.CONSOLE)
+                .runeLiteFormattedMessage(message)
+                .build());
     }
 
     //screenshot stuff
-    private void takeScreenshot(String fileName)
-    {
+    private void takeScreenshot(String fileName) {
         Consumer<Image> imageCallback = (img) ->
         {
             // This callback is on the game thread, move to executor thread
@@ -386,8 +447,7 @@ public class BronzeManModePlugin extends Plugin {
         drawManager.requestNextFrameListener(imageCallback);
     }
 
-    private void takeScreenshot(String fileName, Image image)
-    {
+    private void takeScreenshot(String fileName, Image image) {
         BufferedImage screenshot =
                 new BufferedImage(clientUi.getWidth(), clientUi.getHeight(), BufferedImage.TYPE_INT_ARGB);
 
@@ -399,4 +459,44 @@ public class BronzeManModePlugin extends Plugin {
         graphics.drawImage(image, gameOffsetX, gameOffsetY, null);
         imageCapture.takeScreenshot(screenshot, fileName, "Item Unlocks", false, ImageUploadStyle.NEITHER);
     }
+
+    private void setupChatName(String name) {
+        Widget chatboxInput = client.getWidget(WidgetInfo.CHATBOX_INPUT);
+        if (chatboxInput != null) {
+            System.out.println("setting chat box name");
+            String text = chatboxInput.getText();
+            int idx = text.indexOf(':');
+            if (idx != -1) {
+                String newText = name + text.substring(idx);
+                chatboxInput.setText(newText);
+            }
+        }
+    }
+
+    private String getNameChatbox() {
+        Player player = client.getLocalPlayer();
+        if (player != null) {
+            return setupBronzeManName(iconOffset, player.getName());
+        }
+        return null;
+    }
+
+    private static String setupBronzeManName(int iconIndex, String name) {
+        String nameAndIcon = "<img=" + iconIndex + ">" + name;
+        return nameAndIcon;
+    }
+
+
+    private void AddIconToMessage(ChatMessage chatMessage) {
+        String name = chatMessage.getName();
+        if (!name.equals(Text.removeTags(name))) {
+            return;
+        }
+
+        final MessageNode messageNode = chatMessage.getMessageNode();
+        messageNode.setName(setupBronzeManName(iconOffset, name));
+        chatMessageManager.update(messageNode);
+        client.refreshChat();
+    }
+
 }
