@@ -1,5 +1,6 @@
 package com.robinwithes.bronzemanmode;
 
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.client.game.ItemManager;
@@ -12,7 +13,7 @@ import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-
+@Slf4j
 public class BronzeManModeOverlay extends Overlay {
 
     private final Client client;

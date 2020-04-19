@@ -4,10 +4,11 @@ import com.google.inject.Provides;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.events.*;
+import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetID;
-import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.RuneLite;
 import net.runelite.client.chat.*;
 import net.runelite.client.config.ConfigManager;
@@ -15,16 +16,18 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.ClientUI;
+import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.ImageCapture;
+import net.runelite.client.util.ImageUploadStyle;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.Text;
 
-import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -33,6 +36,8 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.Consumer;
 
 @PluginDescriptor(
         name = "Bronze Man Mode",
@@ -56,6 +61,18 @@ public class BronzeManModePlugin extends Plugin {
     private ChatCommandManager chatCommandManager;
 
     @Inject
+    private DrawManager drawManager;
+
+    @Inject
+    private ImageCapture imageCapture;
+
+    @Inject
+    private ClientUI clientUi;
+
+    @Inject
+    private ScheduledExecutorService executor;
+
+    @Inject
     private OverlayManager overlayManager;
 
     @Inject
@@ -74,10 +91,8 @@ public class BronzeManModePlugin extends Plugin {
 
     private volatile List<Integer> unlockedItems;
     private Color textColor = new Color(87, 87, 87, 0);
-    private Widget grandExchangeWindow;
-    private Widget grandExchangeChatBox;
     private boolean readyToSave = true;
-    private BufferedImage chatHeadIcon;
+    private BufferedImage bronzeManHeadIcon;
 
     @Provides
     BronzeManModeConfig getConfig(ConfigManager configManager) {
@@ -182,8 +197,12 @@ public class BronzeManModePlugin extends Plugin {
      **/
     public void queueItemUnlock(int itemId) {
         unlockedItems.add(itemId);
+        String itemName = itemManager.getItemComposition(itemId).getName();
         bronzemanOverlay.addItemUnlock(itemId);
-        sendMessage("Item Unlocked: " + itemManager.getItemComposition(itemId).getName());
+        if (config.itemUnlockChatMessage()) {
+            sendMessage("Item Unlocked: " + itemManager.getItemComposition(itemId).getName());
+        }
+
         if (readyToSave) {
             readyToSave = false;
             new Thread(() -> {
@@ -191,11 +210,15 @@ public class BronzeManModePlugin extends Plugin {
                     Thread.sleep(500);
                     readyToSave = true;
                     savePlayerUnlocks();
+                    if (config.screenshotUnlocks()) {
+                        takeScreenshot("ItemUnlock " + itemName);
+                    }
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }).start();
         }
+
     }
 
     /**
@@ -264,7 +287,7 @@ public class BronzeManModePlugin extends Plugin {
      **/
     private void setupImages() {
         unlockImage = ImageUtil.getResourceStreamFromClass(getClass(), "/unlock_image.png");
-        BufferedImage image = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_icon.png");
+        bronzeManHeadIcon = ImageUtil.getResourceStreamFromClass(getClass(), "/bronzeman_icon.png");
     }
 
     private void setupChatCommands() {
@@ -274,6 +297,7 @@ public class BronzeManModePlugin extends Plugin {
     }
 
     private void backupUnlocks(ChatMessage chatMessage, String s) {
+        if (!config.backupCommand()) return;
         File playerFolder = new File(RuneLite.PROFILES_DIR, client.getUsername());
         if (!playerFolder.exists()) {
             return;
@@ -294,10 +318,11 @@ public class BronzeManModePlugin extends Plugin {
             return;
         }
 
-        sendMessage("Successfully backed up file!");
+        sendMessage("Successfully backed up file to: " + RuneLite.PROFILES_DIR);
     }
 
     private void countItems(ChatMessage chatMessage, String s) {
+        if (!config.countCommand()) return;
         MessageNode messageNode = chatMessage.getMessageNode();
 
         if (!Text.sanitize(messageNode.getName()).equals(Text.sanitize(client.getLocalPlayer().getName())))
@@ -318,6 +343,7 @@ public class BronzeManModePlugin extends Plugin {
     }
 
     private void resetUnlocks(ChatMessage chatMessage, String s) {
+        if (!config.resetCommand()) return;
         config.startItemsUnlocked(false);
         try {
             File playerFolder = new File(RuneLite.PROFILES_DIR, client.getUsername());
@@ -346,5 +372,31 @@ public class BronzeManModePlugin extends Plugin {
                         .type(ChatMessageType.CONSOLE)
                         .runeLiteFormattedMessage(message)
                         .build());
+    }
+
+    //screenshot stuff
+    private void takeScreenshot(String fileName)
+    {
+        Consumer<Image> imageCallback = (img) ->
+        {
+            // This callback is on the game thread, move to executor thread
+            executor.submit(() -> takeScreenshot(fileName, img));
+        };
+
+        drawManager.requestNextFrameListener(imageCallback);
+    }
+
+    private void takeScreenshot(String fileName, Image image)
+    {
+        BufferedImage screenshot =
+                new BufferedImage(clientUi.getWidth(), clientUi.getHeight(), BufferedImage.TYPE_INT_ARGB);
+
+        Graphics graphics = screenshot.getGraphics();
+        int gameOffsetX = 0;
+        int gameOffsetY = 0;
+
+        // Draw the game onto the screenshot
+        graphics.drawImage(image, gameOffsetX, gameOffsetY, null);
+        imageCapture.takeScreenshot(screenshot, fileName, "Item Unlocks", false, ImageUploadStyle.NEITHER);
     }
 }

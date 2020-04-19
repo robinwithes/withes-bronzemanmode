@@ -37,6 +37,26 @@ public interface BronzeManModeConfig extends Config {
     }
 
     @ConfigItem(
+            keyName = "screenshotUnlocks",
+            name = "Screenshot Unlocks",
+            description = "Take a screenshot of item unlocks"
+    )
+    default boolean screenshotUnlocks()
+    {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "itemUnlockChatMessage",
+            name = "Item Unlock Chat Notification",
+            description = "Sends out a chat message when you unlocked a new item."
+    )
+    default boolean itemUnlockChatMessage()
+    {
+        return true;
+    }
+
+    @ConfigItem(
             keyName = "startItemsUnlocked",
             name = "",
             description = "",
