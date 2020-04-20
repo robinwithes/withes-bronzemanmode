@@ -32,8 +32,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
-import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
@@ -86,6 +87,10 @@ public class BronzeManModePlugin extends Plugin {
     @Getter
     private BufferedImage unlockImage = null;
 
+    final int COLLECTION_LOG_GROUP_ID = 621;
+    final int COLLECTION_VIEW = 35;
+    final int COLLECTION_VIEW_SCROLLBAR = 36;
+    final int COLLECTION_VIEW_HEADER = 19;
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
     private final String COUNT_COMMAND = "!count";
     private final String RESET_COMMAND = "!reset";
@@ -127,8 +132,7 @@ public class BronzeManModePlugin extends Plugin {
         overlayManager.remove(bronzemanOverlay);
         clientThread.invoke(() ->
         {
-            if (client.getGameState() == GameState.LOGGED_IN )
-            {
+            if (client.getGameState() == GameState.LOGGED_IN) {
                 setupChatName(client.getLocalPlayer().getName());
             }
         });
@@ -150,7 +154,9 @@ public class BronzeManModePlugin extends Plugin {
      **/
     @Subscribe
     public void onItemContainerChanged(ItemContainerChanged e) {
-        if (config.progressionPaused()) return;
+        if (config.progressionPaused()) {
+            return;
+        }
         for (Item i : e.getItemContainer().getItems()) {
             if (i == null) {
                 continue;
@@ -168,6 +174,71 @@ public class BronzeManModePlugin extends Plugin {
                 queueItemUnlock(i.getId());
             }
         }
+    }
+
+    @Subscribe
+    public void onWidgetLoaded(WidgetLoaded event) {
+        if (event.getGroupId() != COLLECTION_LOG_GROUP_ID) {
+            return;
+        }
+
+        clientThread.invokeLater(() -> {
+            Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
+            Widget[] headerComponents = collectionViewHeader.getDynamicChildren();
+            headerComponents[0].setText("Bronze Man Unlocks");
+            headerComponents[1].setText("Unlocks: <col=ff0000>" + Integer.toString(unlockedItems.size()));
+            if (headerComponents.length > 2) {
+                headerComponents[2].setText("");
+            }
+            Widget collectionView = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW);
+            Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_SCROLLBAR);
+            collectionView.deleteAllChildren();
+
+            int index = 0;
+            int scrollHeight = 1;
+            int x = 0;
+            int y = 0;
+            for (Integer itemId : unlockedItems) {
+                addItemToCollectionLog(collectionView, itemId, x, y, index);
+                x = x + 42;
+                index++;
+                if (x >= 210) {
+                    x = 0;
+                    y = y + 40;
+                }
+            }
+
+            scrollHeight = ((unlockedItems.size() / 6) * 49);
+            collectionView.setScrollHeight(scrollHeight);
+            collectionView.revalidateScroll();
+            client.runScript(ScriptID.UPDATE_SCROLLBAR, scrollbar.getId(), collectionView.getId(), scrollHeight);
+            collectionView.setScrollY(0);
+            scrollbar.setScrollY(0);
+        });
+
+    }
+
+    private void addItemToCollectionLog(Widget collectionView, Integer itemId, int x, int y, int index) {
+        Widget newItem = collectionView.createChild(index, 5);
+        newItem.setContentType(0);
+        newItem.setName("<col=ff9040>" + itemManager.getItemComposition(itemId).getName() + "</col>");
+        newItem.setItemId(itemId);
+        newItem.setItemQuantity(1);
+        newItem.setItemQuantityMode(0);
+        newItem.setModelId(-1);
+        newItem.setModelType(1);
+        newItem.setSpriteId(-1);
+        newItem.setBorderType(1);
+        newItem.setFilled(false);
+        newItem.setRelativeX(x);
+        newItem.setRelativeY(y);
+        newItem.setOriginalX(x);
+        newItem.setOriginalY(y);
+        newItem.setOriginalWidth(36);
+        newItem.setOriginalHeight(32);
+        newItem.setWidth(36);
+        newItem.setHeight(32);
+        newItem.revalidate();
     }
 
     @Subscribe
@@ -219,7 +290,8 @@ public class BronzeManModePlugin extends Plugin {
 
     @Subscribe
     public void onChatMessage(ChatMessage chatMessage) {
-        if (client.getGameState() != GameState.LOGGED_IN || client.getLocalPlayer().getName() == null || chatMessage.getName() == null) {
+        if (client.getGameState() != GameState.LOGGED_IN || client.getLocalPlayer().getName() == null ||
+                chatMessage.getName() == null) {
             return;
         }
 
@@ -228,17 +300,17 @@ public class BronzeManModePlugin extends Plugin {
         String playerName = Text.removeTags(client.getLocalPlayer().getName());
         playerName = Text.sanitize(playerName);
 
-        if (name.equals(playerName)) {
+        if (name.equals(playerName) || (playerName.substring(0, 3)
+                .equalsIgnoreCase("bmm"))) { //check if player has bmm in his name or if player is local player
             AddIconToMessage(chatMessage);
         }
 
     }
 
     @Subscribe
-    public void onPlayerDeath(PlayerDeath playerDeath)
-    {
-        if (!config.hardcoreBronzeMan() || client.isInInstancedRegion() || playerDeath.getPlayer() != client.getLocalPlayer())
-        {
+    public void onPlayerDeath(PlayerDeath playerDeath) {
+        if (!config.hardcoreBronzeMan() || client.isInInstancedRegion() ||
+                playerDeath.getPlayer() != client.getLocalPlayer()) {
             return;
         }
 
@@ -252,6 +324,7 @@ public class BronzeManModePlugin extends Plugin {
         config.progressionPaused(true);
         sendMessage("You have perished and lost all your Bronze Man Mode unlocks, getting new unlocks will be paused untill you type !continue.");
     }
+
     /**
      * Queues a new unlock to be properly displayed
      **/
@@ -351,8 +424,7 @@ public class BronzeManModePlugin extends Plugin {
      **/
     private void setupImages() {
         final IndexedSprite[] modIcons = client.getModIcons();
-        if (iconOffset != -1 || modIcons == null)
-        {
+        if (iconOffset != -1 || modIcons == null) {
             return;
         }
         unlockImage = ImageUtil.getResourceStreamFromClass(getClass(), "/unlock_image.png");
@@ -376,7 +448,8 @@ public class BronzeManModePlugin extends Plugin {
 
     //continue's normal item unlocking mechanics
     private void continueBronzeManMode(ChatMessage chatMessage, String s) {
-        if (!Text.sanitize(chatMessage.getMessageNode().getName()).equals(Text.sanitize(client.getLocalPlayer().getName()))) {
+        if (!Text.sanitize(chatMessage.getMessageNode().getName())
+                .equals(Text.sanitize(client.getLocalPlayer().getName()))) {
             return;
         }
         if (!config.progressionPaused()) {
@@ -388,7 +461,8 @@ public class BronzeManModePlugin extends Plugin {
     }
 
     private void backupUnlocks(ChatMessage chatMessage, String s) {
-        if (!Text.sanitize(chatMessage.getMessageNode().getName()).equals(Text.sanitize(client.getLocalPlayer().getName()))) {
+        if (!Text.sanitize(chatMessage.getMessageNode().getName())
+                .equals(Text.sanitize(client.getLocalPlayer().getName()))) {
             return;
         }
         if (!config.backupCommand()) {
@@ -440,7 +514,8 @@ public class BronzeManModePlugin extends Plugin {
     }
 
     private void resetUnlocks(ChatMessage chatMessage, String s) {
-        if (!Text.sanitize(chatMessage.getMessageNode().getName()).equals(Text.sanitize(client.getLocalPlayer().getName()))) {
+        if (!Text.sanitize(chatMessage.getMessageNode().getName())
+                .equals(Text.sanitize(client.getLocalPlayer().getName()))) {
             return;
         }
         if (!config.resetCommand()) {
@@ -506,7 +581,6 @@ public class BronzeManModePlugin extends Plugin {
     private void setupChatName(String name) {
         Widget chatboxInput = client.getWidget(WidgetInfo.CHATBOX_INPUT);
         if (chatboxInput != null) {
-            System.out.println("setting chat box name");
             String text = chatboxInput.getText();
             int idx = text.indexOf(':');
             if (idx != -1) {
