@@ -33,9 +33,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Calendar;
+import java.util.*;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
@@ -378,6 +376,9 @@ public class BronzeManModePlugin extends Plugin {
 
     //continue's normal item unlocking mechanics
     private void continueBronzeManMode(ChatMessage chatMessage, String s) {
+        if (!Text.sanitize(chatMessage.getMessageNode().getName()).equals(Text.sanitize(client.getLocalPlayer().getName()))) {
+            return;
+        }
         if (!config.progressionPaused()) {
             sendMessage("Unlock progression is not paused.");
             return;
@@ -387,6 +388,9 @@ public class BronzeManModePlugin extends Plugin {
     }
 
     private void backupUnlocks(ChatMessage chatMessage, String s) {
+        if (!Text.sanitize(chatMessage.getMessageNode().getName()).equals(Text.sanitize(client.getLocalPlayer().getName()))) {
+            return;
+        }
         if (!config.backupCommand()) {
             return;
         }
@@ -436,6 +440,9 @@ public class BronzeManModePlugin extends Plugin {
     }
 
     private void resetUnlocks(ChatMessage chatMessage, String s) {
+        if (!Text.sanitize(chatMessage.getMessageNode().getName()).equals(Text.sanitize(client.getLocalPlayer().getName()))) {
+            return;
+        }
         if (!config.resetCommand()) {
             sendMessage("The reset command is not enabled in your settings.");
             return;
