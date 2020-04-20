@@ -57,6 +57,17 @@ public interface BronzeManModeConfig extends Config {
     }
 
     @ConfigItem(
+            keyName = "hardcoreBronzeMan",
+            name = "Hardcore Bronzeman",
+            description = "Wipes your unlocks on death and pauses unlocking new items until you type !continue"
+    )
+    default boolean hardcoreBronzeMan()
+    {
+        return false;
+    }
+
+    //hidden items start here
+    @ConfigItem(
             keyName = "startItemsUnlocked",
             name = "",
             description = "",
@@ -73,4 +84,23 @@ public interface BronzeManModeConfig extends Config {
             description = ""
     )
     void startItemsUnlocked(boolean condition);
+
+
+    @ConfigItem(
+            keyName = "progressionPaused",
+            name = "",
+            description = "",
+            hidden = true
+    )
+    default boolean progressionPaused()
+    {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "progressionPaused",
+            name = "",
+            description = ""
+    )
+    void progressionPaused(boolean condition);
 }

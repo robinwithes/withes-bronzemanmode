@@ -32,6 +32,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -91,6 +92,7 @@ public class BronzeManModePlugin extends Plugin {
     private final String COUNT_COMMAND = "!count";
     private final String RESET_COMMAND = "!reset";
     private final String BACKUP_COMMAND = "!backup";
+    private final String CONTINUE_COMMAND = "!continue";
 
     private int iconOffset = -1;
     private volatile List<Integer> unlockedItems;
@@ -150,6 +152,7 @@ public class BronzeManModePlugin extends Plugin {
      **/
     @Subscribe
     public void onItemContainerChanged(ItemContainerChanged e) {
+        if (config.progressionPaused()) return;
         for (Item i : e.getItemContainer().getItems()) {
             if (i == null) {
                 continue;
@@ -233,6 +236,24 @@ public class BronzeManModePlugin extends Plugin {
 
     }
 
+    @Subscribe
+    public void onPlayerDeath(PlayerDeath playerDeath)
+    {
+        if (!config.hardcoreBronzeMan() || client.isInInstancedRegion() || playerDeath.getPlayer() != client.getLocalPlayer())
+        {
+            return;
+        }
+
+        if (config.progressionPaused()) {
+            sendMessage("You have perished and lost all your Bronze Man Mode unlocks. Well... You would have.. If your progression wasn't paused already..");
+            return;
+        }
+
+        backupUnlocks(null, null);
+        hardResetUnlocks();
+        config.progressionPaused(true);
+        sendMessage("You have perished and lost all your Bronze Man Mode unlocks, getting new unlocks will be paused untill you type !continue.");
+    }
     /**
      * Queues a new unlock to be properly displayed
      **/
@@ -352,6 +373,17 @@ public class BronzeManModePlugin extends Plugin {
         chatCommandManager.registerCommand(COUNT_COMMAND, this::countItems);
         chatCommandManager.registerCommand(RESET_COMMAND, this::resetUnlocks);
         chatCommandManager.registerCommand(BACKUP_COMMAND, this::backupUnlocks);
+        chatCommandManager.registerCommand(CONTINUE_COMMAND, this::continueBronzeManMode);
+    }
+
+    //continue's normal item unlocking mechanics
+    private void continueBronzeManMode(ChatMessage chatMessage, String s) {
+        if (!config.progressionPaused()) {
+            sendMessage("Unlock progression is not paused.");
+            return;
+        }
+        config.progressionPaused(false);
+        sendMessage("Unlock progression has been unpaused!");
     }
 
     private void backupUnlocks(ChatMessage chatMessage, String s) {
@@ -378,7 +410,7 @@ public class BronzeManModePlugin extends Plugin {
             return;
         }
 
-        sendMessage("Successfully backed up file to: " + RuneLite.PROFILES_DIR);
+        sendMessage("Successfully backed up unlock file to: " + RuneLite.PROFILES_DIR);
     }
 
     private void countItems(ChatMessage chatMessage, String s) {
@@ -405,8 +437,15 @@ public class BronzeManModePlugin extends Plugin {
 
     private void resetUnlocks(ChatMessage chatMessage, String s) {
         if (!config.resetCommand()) {
+            sendMessage("The reset command is not enabled in your settings.");
             return;
         }
+        hardResetUnlocks();
+        sendMessage("Unlocks succesfully reset!");
+    }
+
+    //The same as resetUnlocks() but without the safety check(s)
+    private void hardResetUnlocks() {
         config.startItemsUnlocked(false);
         try {
             File playerFolder = new File(RuneLite.PROFILES_DIR, client.getUsername());
@@ -419,9 +458,6 @@ public class BronzeManModePlugin extends Plugin {
             e.printStackTrace();
             return;
         }
-
-        sendMessage("Unlocks succesfully reset!");
-
     }
 
     private void sendMessage(String chatMessage) {
