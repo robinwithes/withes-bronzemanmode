@@ -300,11 +300,11 @@ public class BronzeManModePlugin extends Plugin {
         String playerName = Text.removeTags(client.getLocalPlayer().getName());
         playerName = Text.sanitize(playerName);
 
-        if (name.equals(playerName) || (playerName.substring(0, 3)
-                .equalsIgnoreCase("bmm"))) { //check if player has bmm in his name or if player is local player
-            AddIconToMessage(chatMessage);
-        }
-
+        try {
+            if (name.equals(playerName) || (name.substring(0, 3).equalsIgnoreCase("bmm"))) { //check if player has bmm in his name or if player is local player
+                AddIconToMessage(chatMessage);
+            }
+        } catch (StringIndexOutOfBoundsException e) {}
     }
 
     @Subscribe
