@@ -5,16 +5,18 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
-import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetInfo;
+import net.runelite.api.widgets.*;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.*;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.chatbox.ChatboxPanelManager;
+import net.runelite.client.game.chatbox.ChatboxTextInput;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.music.MusicPlugin;
 import net.runelite.client.ui.ClientUI;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -32,12 +34,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Calendar;
+import java.time.Instant;
+import java.util.*;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 @PluginDescriptor(
         name = "Bronze Man Mode",
@@ -53,6 +55,9 @@ public class BronzeManModePlugin extends Plugin {
 
     @Inject
     private Client client;
+
+    @Inject
+    private ChatboxPanelManager chatboxPanelManager;
 
     @Inject
     private ChatMessageManager chatMessageManager;
@@ -97,6 +102,10 @@ public class BronzeManModePlugin extends Plugin {
     private final String BACKUP_COMMAND = "!backup";
     private final String CONTINUE_COMMAND = "!continue";
 
+
+    private ChatboxTextInput searchInput;
+    private Widget searchButton;
+    private Collection<Widget> itemEntries;
     private int iconOffset = -1;
     private volatile List<Integer> unlockedItems;
     private Color textColor = new Color(87, 87, 87, 0);
@@ -129,6 +138,7 @@ public class BronzeManModePlugin extends Plugin {
     @Override
     protected void shutDown() throws Exception {
         super.shutDown();
+        itemEntries = null;
         overlayManager.remove(bronzemanOverlay);
         clientThread.invoke(() ->
         {
@@ -147,6 +157,10 @@ public class BronzeManModePlugin extends Plugin {
             loadPlayerUnlocks();
             setupImages();
         }
+        if (e.getGameState() == GameState.LOGIN_SCREEN)
+        {
+            itemEntries = null;
+        }
     }
 
     /**
@@ -154,7 +168,8 @@ public class BronzeManModePlugin extends Plugin {
      **/
     @Subscribe
     public void onItemContainerChanged(ItemContainerChanged e) {
-        if (config.progressionPaused()) {
+        if (config.progressionPaused() && config.hardcoreBronzeMan()) {
+            sendMessage("Your unlocks are still paused due to your dying as a hardcore bronzeman. Type !continue to unpause");
             return;
         }
         for (Item i : e.getItemContainer().getItems()) {
@@ -181,7 +196,7 @@ public class BronzeManModePlugin extends Plugin {
         if (event.getGroupId() != COLLECTION_LOG_GROUP_ID) {
             return;
         }
-
+        itemEntries = null;
         clientThread.invokeLater(() -> {
             Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
             Widget[] headerComponents = collectionViewHeader.getDynamicChildren();
@@ -190,6 +205,8 @@ public class BronzeManModePlugin extends Plugin {
             if (headerComponents.length > 2) {
                 headerComponents[2].setText("");
             }
+            createSearchButton(collectionViewHeader);
+
             Widget collectionView = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW);
             Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_SCROLLBAR);
             collectionView.deleteAllChildren();
@@ -198,17 +215,19 @@ public class BronzeManModePlugin extends Plugin {
             int scrollHeight = 1;
             int x = 0;
             int y = 0;
+            int yIncrement = 40;
+            int xIncrement = 42;
             for (Integer itemId : unlockedItems) {
                 addItemToCollectionLog(collectionView, itemId, x, y, index);
-                x = x + 42;
+                x = x + xIncrement;
                 index++;
-                if (x >= 210) {
+                if (x > 210) {
                     x = 0;
-                    y = y + 40;
+                    y = y + yIncrement;
                 }
             }
 
-            scrollHeight = ((unlockedItems.size() / 6) * 49);
+            scrollHeight = ((unlockedItems.size() / 6) * yIncrement);
             collectionView.setScrollHeight(scrollHeight);
             collectionView.revalidateScroll();
             client.runScript(ScriptID.UPDATE_SCROLLBAR, scrollbar.getId(), collectionView.getId(), scrollHeight);
@@ -218,10 +237,113 @@ public class BronzeManModePlugin extends Plugin {
 
     }
 
+    private void createSearchButton(Widget header) {
+        searchButton = header.createChild(-1, WidgetType.GRAPHIC);
+        searchButton.setSpriteId(SpriteID.GE_SEARCH);
+        searchButton.setOriginalWidth(18);
+        searchButton.setOriginalHeight(17);
+        searchButton.setXPositionMode(WidgetPositionMode.ABSOLUTE_RIGHT);
+        searchButton.setOriginalX(5);
+        searchButton.setOriginalY(20);
+        searchButton.setHasListener(true);
+        searchButton.setAction(1, "Open");
+        searchButton.setOnOpListener((JavaScriptCallback) e -> openSearch());
+        searchButton.setName("Search");
+        searchButton.revalidate();
+    }
+
+    private void openSearch() {
+        updateFilter("");
+        client.playSoundEffect(SoundEffectID.UI_BOOP);
+        searchButton.setAction(1, "Close");
+        searchButton.setOnOpListener((JavaScriptCallback) e -> closeSearch());
+        searchInput = chatboxPanelManager.openTextInput("Search unlock list")
+                .onChanged(s -> clientThread.invokeLater(() -> updateFilter(s.trim())))
+                .onClose(() ->
+                {
+                    clientThread.invokeLater(() -> updateFilter(""));
+                    searchButton.setOnOpListener((JavaScriptCallback) e -> openSearch());
+                    searchButton.setAction(1, "Open");
+                })
+                .build();
+    }
+
+    private void closeSearch()
+    {
+        updateFilter("");
+        chatboxPanelManager.close();
+        client.playSoundEffect(SoundEffectID.UI_BOOP);
+    }
+
+    private void updateFilter(String input)
+    {
+        final Widget collectionView = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW);
+
+        if (collectionView == null)
+        {
+            return;
+        }
+
+        String filter = input.toLowerCase();
+        updateList(collectionView, filter);
+    }
+
+    private void updateList(Widget collectionView, String filter)
+    {
+
+        if (itemEntries == null)
+        {
+            itemEntries = Arrays.stream(collectionView.getDynamicChildren())
+                    .sorted(Comparator.comparing(Widget::getRelativeY))
+                    .collect(Collectors.toList());
+        }
+
+        itemEntries.forEach(w -> w.setHidden(true));
+
+        Collection<Widget> matchingItems = itemEntries.stream()
+                .filter(w -> w.getName().toLowerCase().contains(filter))
+                .collect(Collectors.toList());
+
+        int x = 0;
+        int y = 0;
+        for (Widget entry : matchingItems)
+        {
+            entry.setHidden(false);
+            entry.setOriginalY(y);
+            entry.setOriginalX(x);
+            entry.revalidate();
+            x = x + 42;
+            if (x > 210) {
+                x = 0;
+                y = y + 40;
+            }
+        }
+
+        y += 3;
+
+        int newHeight = 0;
+
+        if (collectionView.getScrollHeight() > 0)
+        {
+            newHeight = (collectionView.getScrollY() * y) / collectionView.getScrollHeight();
+        }
+
+        collectionView.setScrollHeight(y);
+        collectionView.revalidateScroll();
+
+        Widget scrollbar = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_SCROLLBAR);
+        client.runScript(
+                ScriptID.UPDATE_SCROLLBAR,
+                scrollbar.getId(),
+                collectionView.getId(),
+                newHeight
+        );
+    }
+
     private void addItemToCollectionLog(Widget collectionView, Integer itemId, int x, int y, int index) {
+        String itemName = itemManager.getItemComposition(itemId).getName();
         Widget newItem = collectionView.createChild(index, 5);
         newItem.setContentType(0);
-        newItem.setName("<col=ff9040>" + itemManager.getItemComposition(itemId).getName() + "</col>");
         newItem.setItemId(itemId);
         newItem.setItemQuantity(1);
         newItem.setItemQuantityMode(0);
@@ -238,7 +360,27 @@ public class BronzeManModePlugin extends Plugin {
         newItem.setOriginalHeight(32);
         newItem.setWidth(36);
         newItem.setHeight(32);
+        newItem.setHasListener(true);
+        newItem.setAction(1, "Inspect");
+        newItem.setOnOpListener((JavaScriptCallback) e -> handleItemAction(itemName));
+        newItem.setName(itemName);
         newItem.revalidate();
+    }
+
+    private void handleItemAction(String itemName) {
+
+        if (itemName.equalsIgnoreCase("cat ears")) {
+            sendMessage("Now we just need elf ears..");
+        }
+
+        final ChatMessageBuilder message = new ChatMessageBuilder()
+                .append(ChatColorType.NORMAL)
+                .append("It's a " + itemName);
+
+        chatMessageManager.queue(QueuedMessage.builder()
+                .type(ChatMessageType.ITEM_EXAMINE)
+                .runeLiteFormattedMessage(message.build())
+                .build());
     }
 
     @Subscribe
@@ -301,10 +443,12 @@ public class BronzeManModePlugin extends Plugin {
         playerName = Text.sanitize(playerName);
 
         try {
-            if (name.equals(playerName) || (name.substring(0, 3).equalsIgnoreCase("bmm"))) { //check if player has bmm in his name or if player is local player
+            if (name.equals(playerName) || (name.substring(0, 3)
+                    .equalsIgnoreCase("bmm"))) { //check if player has bmm in his name or if player is local player
                 AddIconToMessage(chatMessage);
             }
-        } catch (StringIndexOutOfBoundsException e) {}
+        } catch (StringIndexOutOfBoundsException e) {
+        }
     }
 
     @Subscribe
