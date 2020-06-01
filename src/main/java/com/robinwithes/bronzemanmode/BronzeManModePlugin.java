@@ -169,7 +169,7 @@ public class BronzeManModePlugin extends Plugin {
     @Subscribe
     public void onItemContainerChanged(ItemContainerChanged e) {
         if (config.progressionPaused() && config.hardcoreBronzeMan()) {
-            sendMessage("Your unlocks are still paused due to your dying as a hardcore bronzeman. Type !continue to unpause");
+            sendMessage("Your unlocks are still paused due to you dying as a hardcore bronzeman. Type !continue to unpause");
             return;
         }
         for (Item i : e.getItemContainer().getItems()) {
@@ -463,7 +463,7 @@ public class BronzeManModePlugin extends Plugin {
             return;
         }
 
-        backupUnlocks(null, null);
+        hardBackupUnlocks();
         hardResetUnlocks();
         config.progressionPaused(true);
         sendMessage("You have perished and lost all your Bronze Man Mode unlocks, getting new unlocks will be paused untill you type !continue.");
@@ -635,6 +635,30 @@ public class BronzeManModePlugin extends Plugin {
         sendMessage("Successfully backed up unlock file to: " + RuneLite.PROFILES_DIR);
     }
 
+    //same as backupunlocks but without safety checks
+    private void hardBackupUnlocks() {
+        File playerFolder = new File(RuneLite.PROFILES_DIR, client.getUsername());
+        if (!playerFolder.exists()) {
+            return;
+        }
+        File playerFile = new File(playerFolder, "bronzeman-unlocks.txt");
+        if (!playerFile.exists()) {
+            return;
+        }
+
+        Path originalPath = playerFile.toPath();
+        try {
+            Calendar cal = Calendar.getInstance();
+            SimpleDateFormat sdf = new SimpleDateFormat("MM_WW_HH_mm_ss");
+            Files.copy(originalPath, Paths.get(playerFolder.getPath() + "_" + sdf.format(cal.getTime()) + "hcdeath.backup"),
+                    StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        sendMessage("Saved a backup to " + RuneLite.PROFILES_DIR + " just in case..");
+    }
     private void countItems(ChatMessage chatMessage, String s) {
         if (!config.countCommand()) {
             return;
