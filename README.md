@@ -1,8 +1,9 @@
-# BronzeManMode Plugin
-A plugin made to closely represent the idea of a custom old school runescape gamemode called bronze man mode originally thought off by MLGudi. Bronzemanmode is like ironman but with one crucial difference, once you obtain a item either through a drop or through a playerkill you "unlock" it. Items that are unlocked are able to be bought from the Grand Exchange. Watch this video for a overview of the unofficial rules and the way this was intended to be played https://www.youtube.com/watch?v=GFNfa2saOJg&t=62s
+
+# BronzeManMode Plugin ![Grand Exchange](https://i.gyazo.com/ce8c02f1dd685691d685d9babecf158c.png)
+A plugin made to closely represent the idea of a custom old school runescape gamemode called bronze man mode originally thought off by u/jesse1412 and then realized by MLGudi. Bronzemanmode is like ironman but with one crucial difference, once you obtain a item either through a drop or through a playerkill you "unlock" it. Items that are unlocked are able to be bought from the Grand Exchange. Watch this video for a overview of the unofficial rules and the way this was intended to be played https://www.youtube.com/watch?v=GFNfa2saOJg&t=62s
 It now also includes a hardcore mode that will wipe your progress on non-instanced deaths!
 
-##How it works?
+## How it works
 
 - Items are grayed out in the Grand Exhange until you unlock them by gathering them yourself first, if it is your first time having a unique item in your inventory you will see a item unlocked message.
 - Every player that has a name that starts with "BMM" will have a bronzemanmode icon in front of their name. This excludes yourself so don't worry about namechanging!
@@ -14,7 +15,7 @@ It now also includes a hardcore mode that will wipe your progress on non-instanc
 - You can configure the plugin to take screenshots of unlocks!
 
 
-##Hardcore BronzeManMode
+## Hardcore BronzeManMode
 For the truly daring there is also Hardcore BronzeManMode. With hardcore mode enabled any death outside of instances will reset your unlocks and pause unlocking more items until you type !continue, there will always be a automatic backup of your unlocks before they get wiped!
 
 ## Screenshots
@@ -27,8 +28,13 @@ You can see your total unlocks and specific unlocks by opening the collection lo
 ![Collection Log Searching](https://i.gyazo.com/359d8dfeb83296e6bc9520a59d50ec68.png)
 You can also search for specific unlocks in the collection log.
 
-![Chat Icons](https://i.gyazo.com/f94dd9d268058617d8bdaaff40dbc319.png)
+![Chat Icons](https://i.gyazo.com/0c5e628adab6bc7ec566786dc0330003.png)
 Yourself and other people with bmm in their name will have a bronzeman icon
 
 ![Unlock Message](https://i.gyazo.com/f1edcd940aa58c353a4ac7c72e2599b0.jpg)
 You get configurable popup messages when you unlock new items!
+
+## Credits
+ - u/jesse1412 for the bronzemanmode idea
+ - Pantertainment for the chat icon system
+ - Steedie for chat icon design
