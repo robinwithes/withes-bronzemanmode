@@ -452,9 +452,9 @@ public class BronzeManModePlugin extends Plugin {
     }
 
     @Subscribe
-    public void onPlayerDeath(PlayerDeath playerDeath) {
+    public void onActorDeath(ActorDeath actorDeath) {
         if (!config.hardcoreBronzeMan() || client.isInInstancedRegion() ||
-                playerDeath.getPlayer() != client.getLocalPlayer()) {
+                actorDeath.getActor() != client.getLocalPlayer()) {
             return;
         }
 
