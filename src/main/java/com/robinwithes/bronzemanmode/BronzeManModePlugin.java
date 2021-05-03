@@ -185,8 +185,13 @@ public class BronzeManModePlugin extends Plugin {
             if (i.getQuantity() <= 0) {
                 continue;
             }
-            if (!unlockedItems.contains(i.getId())) {
-                queueItemUnlock(i.getId());
+
+            ItemComposition itemComposition = itemManager.getItemComposition(i.getId());
+            int realItemId = itemComposition.getNote() == 799 ? itemComposition.getLinkedNoteId() : itemComposition.getId();
+            ItemComposition realItemComposition = itemManager.getItemComposition(realItemId);
+
+            if (!unlockedItems.contains(realItemId) && realItemComposition.isTradeable()) {
+                queueItemUnlock(realItemId);
             }
         }
     }
@@ -784,4 +789,19 @@ public class BronzeManModePlugin extends Plugin {
         client.refreshChat();
     }
 
+    //Block trading by consuming the event
+    @Subscribe
+    public void onMenuOptionClicked (MenuOptionClicked event)
+    {
+        if (!config.blockTrading()) {
+            return;
+        }
+
+        String option = event.getMenuOption().toLowerCase();
+        if (option.contains("trade with") || option.contains("accept trade"))
+        {
+            event.consume();
+            sendMessage("You are a bronzeman, you stand alone... Sort of.");
+        }
+    }
 }

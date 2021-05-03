@@ -57,13 +57,16 @@ public class BronzeManModeOverlay extends Overlay {
 
         int drawY = currentUnlock.getLocationY();
         graphics.drawImage(plugin.getUnlockImage(), -62, drawY, null);
-        graphics.drawImage(getImage(currentUnlock.getItemId()), -56, drawY + 7, null);
-        if (drawY < 10) {
-            currentUnlock.setLocationY(drawY + 1);
+        graphics.drawImage(getImage(currentUnlock.getItemId()), -56, drawY + 4, null);
+        if (drawY < 0) {
+            currentUnlock.setLocationY(drawY + 5);
         }
         if (currentUnlock.finishedDisplaying(itemUnlockList.size())) {
-            itemUnlockList.remove(currentUnlock);
-            currentUnlock = null;
+            currentUnlock.setLocationY(drawY - 5);
+            if (drawY < -20) {
+                itemUnlockList.remove(currentUnlock);
+                currentUnlock = null;
+            }
         }
         return null;
     }
