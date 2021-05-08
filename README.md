@@ -35,6 +35,7 @@ Yourself and other people with bmm in their name will have a bronzeman icon
 You get configurable popup messages when you unlock new items!
 
 ## Credits
- - u/jesse1412 for the bronzemanmode idea
+ - MLGudi for bringing the concept to my attention and for help on the plugin itself
+ - u/jesse1412 for the initial bronzemanmode idea
  - Pantertainment for the chat icon system
  - Steedie for chat icon design
