@@ -66,6 +66,13 @@ public interface BronzeManModeConfig extends Config {
         return false;
     }
 
+    @ConfigItem(
+            keyName = "blockTrading",
+            name = "Block Trading",
+            description = "Blocks the sending and receiving of trade requests"
+    )
+    default boolean blockTrading() { return true; }
+
     //hidden items start here
     @ConfigItem(
             keyName = "startItemsUnlocked",

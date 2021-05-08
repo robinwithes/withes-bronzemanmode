@@ -17,7 +17,7 @@ public class ItemUnlock {
 
     public ItemUnlock(int itemId) {
         this.itemId = itemId;
-        this.locationY = -20;
+        this.locationY = -42;
         this.initTime = -1;
     }
 
