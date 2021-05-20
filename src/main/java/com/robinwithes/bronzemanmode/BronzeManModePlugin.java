@@ -411,7 +411,7 @@ public class BronzeManModePlugin extends Plugin {
             return;
         }
 
-        Widget[] children = client.getWidget(162, 53).getChildren();
+        Widget[] children = client.getWidget(162, 50).getChildren();
         if (children == null) {
             return;
         }
