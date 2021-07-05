@@ -57,6 +57,16 @@ public interface BronzeManModeConfig extends Config {
     }
 
     @ConfigItem(
+            keyName = "showBMMIcon",
+            name = "Show Bronzemanmode chat icon",
+            description = "Configures whether to show a bronzeman icon in your chatbox."
+    )
+    default boolean showBMMIcon()
+    {
+        return true;
+    }
+
+    @ConfigItem(
             keyName = "hardcoreBronzeMan",
             name = "Hardcore Bronzeman",
             description = "Wipes your unlocks on death and pauses unlocking new items until you type !continue"
