@@ -765,10 +765,10 @@ public class BronzeManModePlugin extends Plugin {
 
     private String getNameChatbox() {
         Player player = client.getLocalPlayer();
-        if (player != null) {
+        if (player != null && config.showBMMIcon()) {
             return setupBronzeManName(iconOffset, player.getName());
         }
-        return null;
+        return player.getName();
     }
 
     private static String setupBronzeManName(int iconIndex, String name) {
@@ -778,6 +778,7 @@ public class BronzeManModePlugin extends Plugin {
 
 
     private void AddIconToMessage(ChatMessage chatMessage) {
+        if (!config.showBMMIcon()) return;
         String name = chatMessage.getName();
         if (!name.equals(Text.removeTags(name))) {
             return;
