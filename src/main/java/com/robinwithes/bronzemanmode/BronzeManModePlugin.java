@@ -93,8 +93,9 @@ public class BronzeManModePlugin extends Plugin {
     private BufferedImage unlockImage = null;
 
     final int COLLECTION_LOG_GROUP_ID = 621;
-    final int COLLECTION_VIEW = 35;
-    final int COLLECTION_VIEW_SCROLLBAR = 36;
+    final int COMBAT_ACHIEVEMENT_BUTTON = 20;
+    final int COLLECTION_VIEW = 36;
+    final int COLLECTION_VIEW_SCROLLBAR = 37;
     final int COLLECTION_VIEW_HEADER = 19;
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
     private final String COUNT_COMMAND = "!count";
@@ -204,6 +205,8 @@ public class BronzeManModePlugin extends Plugin {
         itemEntries = null;
         clientThread.invokeLater(() -> {
             Widget collectionViewHeader = client.getWidget(COLLECTION_LOG_GROUP_ID, COLLECTION_VIEW_HEADER);
+            Widget combatAchievementsButton = client.getWidget(COLLECTION_LOG_GROUP_ID, COMBAT_ACHIEVEMENT_BUTTON);
+            combatAchievementsButton.setHidden(true); //nothing personal mod husky
             Widget[] headerComponents = collectionViewHeader.getDynamicChildren();
             headerComponents[0].setText("Bronze Man Unlocks");
             headerComponents[1].setText("Unlocks: <col=ff0000>" + Integer.toString(unlockedItems.size()));
